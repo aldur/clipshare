@@ -102,9 +102,9 @@
           nixpkgs.overlays = [ self.overlays.default ];
         };
 
-        homeManagerModules.default = { config, lib, pkgs, ... }: {
+        homeManagerModules.default = { config, osConfig, lib, pkgs, ... }: {
           imports = [ ./home-manager-module.nix ];
-          nixpkgs.overlays = lib.mkIf (!config.home-manager.useGlobalPkgs)
+          nixpkgs.overlays = lib.mkIf (!osConfig.home-manager.useGlobalPkgs)
             [ self.overlays.default ];
         };
 
