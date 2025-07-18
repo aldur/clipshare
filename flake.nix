@@ -104,7 +104,8 @@
 
         homeManagerModules.default = { config, lib, pkgs, ... }: {
           imports = [ ./home-manager-module.nix ];
-          nixpkgs.overlays = [ self.overlays.default ];
+          nixpkgs.overlays = lib.mkIf (!config.home-manager.useGlobalPkgs)
+            [ self.overlays.default ];
         };
 
         overlays.default = final: prev: {
