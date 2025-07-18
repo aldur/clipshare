@@ -81,9 +81,8 @@ func main() {
 	http.HandleFunc("/", indexHandler)
 	http.HandleFunc("/clipboard", clipboardHandler)
 
-	fmt.Printf("Clipshare server starting on %s\n", addr)
+	fmt.Printf("Clipshare server starting on http://%s\n", addr)
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		fmt.Printf("Server failed to start: %v\n", err)
 	}
 }
-
