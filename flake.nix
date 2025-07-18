@@ -8,9 +8,9 @@
 
   outputs = { self, nixpkgs, flake-utils }:
     flake-utils.lib.eachDefaultSystem (system:
-      let 
+      let
         pkgs = nixpkgs.legacyPackages.${system};
-        
+
         # Common attributes for all packages
         commonAttrs = {
           version = "0.1.0";
@@ -22,24 +22,28 @@
             maintainers = [ ];
           };
         };
-        
+
         # Helper function to create test derivations
-        mkTest = name: testCommand: pkgs.stdenv.mkDerivation {
-          name = "clipshare-${name}";
-          src = ./.;
-          buildInputs = with pkgs; [ go ];
-          buildPhase = ''
-            export HOME=$(mktemp -d)
-            ${testCommand}
-          '';
-          installPhase = ''
-            touch $out
-          '';
-        };
+        mkTest = name: testCommand:
+          pkgs.stdenv.mkDerivation {
+            name = "clipshare-${name}";
+            src = builtins.path {
+              path = ./.;
+              name = "source";
+            };
+            buildInputs = with pkgs; [ go ];
+            buildPhase = ''
+              export HOME=$(mktemp -d)
+              ${testCommand}
+            '';
+            installPhase = ''
+              touch $out
+            '';
+          };
       in {
         packages = {
           default = self.packages.${system}.server;
-          
+
           server = pkgs.buildGoModule (commonAttrs // {
             pname = "clipshare-server";
             meta = commonAttrs.meta // {
@@ -50,7 +54,7 @@
               mv $out/bin/clipshare $out/bin/clipshare-server
             '';
           });
-          
+
           client = pkgs.buildGoModule (commonAttrs // {
             pname = "clipshare-client";
             subPackages = [ "cmd/client" ];
@@ -72,7 +76,8 @@
           unit-tests = mkTest "unit-tests" "go test -v ./...";
 
           # Integration tests
-          integration-tests = mkTest "integration-tests" ''go test -v -run "^TestClientServer" ./...'';
+          integration-tests = mkTest "integration-tests"
+            ''go test -v -run "^TestClientServer" ./...'';
 
           # Build tests - ensure packages build successfully
           build-server = self.packages.${system}.server;
@@ -82,7 +87,7 @@
           lint = mkTest "lint" ''
             go fmt ./...
             go vet ./...
-            
+
             # Check if gofmt would make changes
             if [ -n "$(gofmt -l .)" ]; then
               echo "The following files need formatting:"
@@ -96,12 +101,12 @@
           imports = [ ./nixos-module.nix ];
           nixpkgs.overlays = [ self.overlays.default ];
         };
-        
+
         homeManagerModules.default = { config, lib, pkgs, ... }: {
           imports = [ ./home-manager-module.nix ];
           nixpkgs.overlays = [ self.overlays.default ];
         };
-        
+
         overlays.default = final: prev: {
           clipshare-server = self.packages.${final.system}.server;
           clipshare-client = self.packages.${final.system}.client;
