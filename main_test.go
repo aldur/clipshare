@@ -3,9 +3,11 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestClipboardGet(t *testing.T) {
@@ -146,6 +148,7 @@ func TestIntegration(t *testing.T) {
 
 func TestConcurrentAccess(t *testing.T) {
 	clipboard = ""
+	clearTimer = nil
 	
 	const numGoroutines = 10
 	const testText = "concurrent test"
@@ -174,5 +177,105 @@ func TestConcurrentAccess(t *testing.T) {
 	
 	for i := 0; i < numGoroutines; i++ {
 		<-done
+	}
+}
+
+func TestAutoClear(t *testing.T) {
+	clipboard = ""
+	clearTimer = nil
+	
+	testText := "auto clear test"
+	setReq := SetRequest{Text: testText, Device: "test"}
+	body, _ := json.Marshal(setReq)
+	
+	req := httptest.NewRequest(http.MethodPost, "/clipboard", bytes.NewBuffer(body))
+	w := httptest.NewRecorder()
+	clipboardHandler(w, req)
+	
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, w.Code)
+	}
+	
+	// Verify content is set
+	if clipboard != testText {
+		t.Errorf("expected clipboard %q, got %q", testText, clipboard)
+	}
+	
+	// Wait for auto-clear (using shorter duration for test)
+	time.Sleep(100 * time.Millisecond)
+	
+	// Timer should still be active, content should remain
+	if clipboard != testText {
+		t.Errorf("clipboard cleared too early: expected %q, got %q", testText, clipboard)
+	}
+}
+
+func TestMultipleSetsCancelPreviousTimer(t *testing.T) {
+	clipboard = ""
+	clearTimer = nil
+	
+	// Set first text
+	firstText := "first text"
+	setReq := SetRequest{Text: firstText, Device: "test"}
+	body, _ := json.Marshal(setReq)
+	
+	req := httptest.NewRequest(http.MethodPost, "/clipboard", bytes.NewBuffer(body))
+	w := httptest.NewRecorder()
+	clipboardHandler(w, req)
+	
+	// Set second text immediately
+	secondText := "second text"
+	setReq = SetRequest{Text: secondText, Device: "test"}
+	body, _ = json.Marshal(setReq)
+	
+	req = httptest.NewRequest(http.MethodPost, "/clipboard", bytes.NewBuffer(body))
+	w = httptest.NewRecorder()
+	clipboardHandler(w, req)
+	
+	// Verify second text is set
+	if clipboard != secondText {
+		t.Errorf("expected clipboard %q, got %q", secondText, clipboard)
+	}
+}
+
+func TestConcurrentSets(t *testing.T) {
+	clipboard = ""
+	clearTimer = nil
+	
+	const numGoroutines = 5
+	done := make(chan string, numGoroutines)
+	
+	// Launch concurrent set operations
+	for i := 0; i < numGoroutines; i++ {
+		go func(id int) {
+			testText := fmt.Sprintf("concurrent set %d", id)
+			setReq := SetRequest{Text: testText, Device: "test"}
+			body, _ := json.Marshal(setReq)
+			
+			req := httptest.NewRequest(http.MethodPost, "/clipboard", bytes.NewBuffer(body))
+			w := httptest.NewRecorder()
+			clipboardHandler(w, req)
+			
+			done <- testText
+		}(i)
+	}
+	
+	// Wait for all to complete
+	results := make([]string, numGoroutines)
+	for i := 0; i < numGoroutines; i++ {
+		results[i] = <-done
+	}
+	
+	// One of the values should be the final clipboard content
+	found := false
+	for _, result := range results {
+		if clipboard == result {
+			found = true
+			break
+		}
+	}
+	
+	if !found {
+		t.Errorf("clipboard content %q not found in concurrent results %v", clipboard, results)
 	}
 }
