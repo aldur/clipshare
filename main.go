@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"time"
 )
 
 type SetRequest struct {
@@ -19,8 +20,10 @@ type SetRequest struct {
 var indexHTML []byte
 
 var (
-	clipboard string
-	mu        sync.RWMutex
+	clipboard       string
+	mu              sync.RWMutex
+	clearTimer      *time.Timer
+	timerGeneration int64
 )
 
 func clipboardHandler(w http.ResponseWriter, r *http.Request) {
@@ -46,8 +49,22 @@ func clipboardHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		mu.Lock()
+		defer mu.Unlock()
 		clipboard = req.Text
-		mu.Unlock()
+
+		if clearTimer != nil {
+			clearTimer.Stop()
+		}
+
+		timerGeneration++
+		currentGen := timerGeneration
+		clearTimer = time.AfterFunc(60*time.Second, func() {
+			mu.Lock()
+			defer mu.Unlock()
+			if timerGeneration == currentGen {
+				clipboard = ""
+			}
+		})
 
 		w.WriteHeader(http.StatusOK)
 
