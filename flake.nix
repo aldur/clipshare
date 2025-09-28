@@ -14,7 +14,7 @@
         # Common attributes for all packages
         commonAttrs = {
           version = "0.1.0";
-          src = ./.;
+          src = self;
           vendorHash = null;
           meta = with pkgs.lib; {
             homepage = "https://github.com/aldur/clipshare";
@@ -98,12 +98,12 @@
         };
       }) // {
         nixosModules.default = { config, lib, pkgs, ... }: {
-          imports = [ ./nixos-module.nix ];
+          imports = [ ./nix/nixos-module.nix ];
           nixpkgs.overlays = [ self.overlays.default ];
         };
 
         homeManagerModules.default = { config, osConfig, lib, pkgs, ... }: {
-          imports = [ ./home-manager-module.nix ];
+          imports = [ ./nix/home-manager-module.nix ];
           nixpkgs.overlays = lib.mkIf (!osConfig.home-manager.useGlobalPkgs)
             [ self.overlays.default ];
         };
