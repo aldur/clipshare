@@ -1,0 +1,73 @@
+openapi: 3.0.0
+info:
+  title: Clipshare API
+  description: A simple API for sharing a clipboard between devices.
+  version: 1.0.0
+tags:
+  - name: default
+    description: Default operations
+  - name: clipboard
+    description: Clipboard operations
+servers:
+  - url: http://localhost:8080
+paths:
+  /:
+    get:
+      summary: Get the index page
+      description: Get the index page.
+      operationId: getIndex
+      tags:
+        - default
+      responses:
+        '200':
+          description: The index.html page
+          content:
+            text/html:
+              schema:
+                type: string
+              example: "<html><body><h1>Clipshare</h1></body></html>"
+  /clipboard:
+    get:
+      summary: Get the clipboard content
+      description: Get the current clipboard content.
+      operationId: getClipboard
+      tags:
+        - clipboard
+      responses:
+        '200':
+          description: The current clipboard content
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: "Hello, world!"
+    post:
+      summary: Set the clipboard content
+      description: Set the clipboard content.
+      operationId: setClipboard
+      tags:
+        - clipboard
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text:
+                  type: string
+                device:
+                  type: string
+            example:
+              text: "Hello, world!"
+              device: "My Phone"
+      responses:
+        '200':
+          description: Clipboard content set successfully
+        '400':
+          description: Invalid request body
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: "Invalid request body"
