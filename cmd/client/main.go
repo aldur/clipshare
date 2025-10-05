@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,22 +15,13 @@ type SetRequest struct {
 	Device string `json:"device"`
 }
 
-func getBaseURL() string {
-	if url := os.Getenv("REST_CLIPBOARD_URL"); url != "" {
-		return url
-	}
-	return "http://localhost:8080"
-}
+var (
+	url    string
+	device string
+)
 
-func getDeviceName() string {
-	if device := os.Getenv("REST_CLIPBOARD_DEVICE"); device != "" {
-		return device
-	}
-	return "cli"
-}
-
-func get() error {
-	resp, err := http.Get(getBaseURL() + "/clipboard")
+func get(url string) error {
+	resp, err := http.Get(url + "/clipboard")
 	if err != nil {
 		return fmt.Errorf("failed to get clipboard: %w", err)
 	}
@@ -48,10 +40,7 @@ func get() error {
 	return nil
 }
 
-func set(text, device string) error {
-	if device == "" {
-		device = getDeviceName()
-	}
+func set(text, device, url string) error {
 
 	req := SetRequest{
 		Text:   text,
@@ -63,7 +52,7 @@ func set(text, device string) error {
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	resp, err := http.Post(getBaseURL()+"/clipboard", "application/json", bytes.NewBuffer(jsonData))
+	resp, err := http.Post(url+"/clipboard", "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return fmt.Errorf("failed to set clipboard: %w", err)
 	}
@@ -93,76 +82,92 @@ func isStdinAvailable() bool {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "Usage: %s <command> [args]\n", os.Args[0])
-	fmt.Fprintf(os.Stderr, "Commands:\n")
+	fmt.Fprintf(os.Stderr, "Usage: %s [flags] <command> [args]\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "\nFlags:\n")
+	flag.PrintDefaults()
+	fmt.Fprintf(os.Stderr, "\nCommands:\n")
 	fmt.Fprintf(os.Stderr, "  get                    - Get clipboard content\n")
-	fmt.Fprintf(os.Stderr, "  set <text> [device]    - Set clipboard content\n")
-	fmt.Fprintf(os.Stderr, "  set [device]           - Set clipboard content from stdin (auto-detected)\n")
-	fmt.Fprintf(os.Stderr, "  set - [device]         - Set clipboard content from stdin (explicit)\n")
+	fmt.Fprintf(os.Stderr, "  set <text>             - Set clipboard content\n")
+	fmt.Fprintf(os.Stderr, "  set                    - Set clipboard content from stdin (auto-detected)\n")
+	fmt.Fprintf(os.Stderr, "  set -                  - Set clipboard content from stdin (explicit)\n")
 	fmt.Fprintf(os.Stderr, "\nEnvironment variables:\n")
-	fmt.Fprintf(os.Stderr, "  REST_CLIPBOARD_URL     - Server URL (default: http://localhost:8080)\n")
-	fmt.Fprintf(os.Stderr, "  REST_CLIPBOARD_DEVICE  - Device name (default: cli)\n")
+	fmt.Fprintf(os.Stderr, "  CLIPSHARE_URL     - Server URL (default: http://localhost:8080)\n")
+	fmt.Fprintf(os.Stderr, "  CLIPSHARE_DEVICE  - Device name (default: cli)\n")
 	fmt.Fprintf(os.Stderr, "\nExamples:\n")
 	fmt.Fprintf(os.Stderr, "  %s get\n", os.Args[0])
 	fmt.Fprintf(os.Stderr, "  %s set \"hello world\"\n", os.Args[0])
-	fmt.Fprintf(os.Stderr, "  %s set \"hello world\" laptop\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "  %s -device laptop set \"hello world\"\n", os.Args[0])
 	fmt.Fprintf(os.Stderr, "  echo \"hello world\" | %s set\n", os.Args[0])
 	fmt.Fprintf(os.Stderr, "  echo \"hello world\" | %s set -\n", os.Args[0])
-	fmt.Fprintf(os.Stderr, "  echo \"hello world\" | %s set laptop\n", os.Args[0])
-	fmt.Fprintf(os.Stderr, "  REST_CLIPBOARD_URL=http://example.com:8080 %s get\n", os.Args[0])
-	fmt.Fprintf(os.Stderr, "  REST_CLIPBOARD_DEVICE=laptop %s set \"hello world\"\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "  echo \"hello world\" | %s -device laptop set\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "  %s -url http://example.com:8080 get\n", os.Args[0])
 	os.Exit(1)
 }
 
 func main() {
-	if len(os.Args) < 2 {
+	defaultURL := "http://localhost:8080"
+	if urlEnv := os.Getenv("CLIPSHARE_URL"); urlEnv != "" {
+		defaultURL = urlEnv
+	}
+	urlUsage := "Server URL"
+
+	defaultDevice := "cli"
+	if deviceEnv := os.Getenv("CLIPSHARE_DEVICE"); deviceEnv != "" {
+		defaultDevice = deviceEnv
+	}
+	deviceUsage := "Device name"
+
+	shorthand := " (shorthand)"
+
+	flag.StringVar(&url, "url", defaultURL, urlUsage)
+	flag.StringVar(&url, "u", defaultURL, urlUsage+shorthand)
+	flag.StringVar(&device, "device", defaultDevice, deviceUsage)
+	flag.StringVar(&device, "d", defaultDevice, deviceUsage+shorthand)
+
+	flag.Usage = usage
+	flag.Parse()
+
+	if flag.NArg() < 1 {
 		usage()
 	}
 
-	command := os.Args[1]
+	command := flag.Arg(0)
 
 	switch command {
 	case "get":
-		if err := get(); err != nil {
+		if err := get(url); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 
 	case "set":
 		var text string
-		var device string
 		var err error
 
 		// Check if stdin has data available
-		if len(os.Args) < 3 && isStdinAvailable() {
+		if flag.NArg() < 2 && isStdinAvailable() {
 			// Read from stdin when no arguments provided but stdin has data
 			text, err = readStdin()
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
-		} else if len(os.Args) >= 3 && os.Args[2] == "-" {
+		} else if flag.NArg() >= 2 && flag.Arg(1) == "-" {
 			// Explicit stdin read with "-"
 			text, err = readStdin()
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
-			if len(os.Args) >= 4 {
-				device = os.Args[3]
-			}
-		} else if len(os.Args) >= 3 {
+		} else if flag.NArg() >= 2 {
 			// Regular argument
-			text = os.Args[2]
-			if len(os.Args) >= 4 {
-				device = os.Args[3]
-			}
+			text = flag.Arg(1)
 		} else {
 			// No arguments and no stdin data
 			usage()
 		}
 
-		if err := set(text, device); err != nil {
+		if err := set(text, device, url); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}

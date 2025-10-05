@@ -15,7 +15,7 @@
         commonAttrs = {
           version = "0.1.0";
           src = self;
-          vendorHash = null;
+          vendorHash = null; # Look ma, no deps!
           meta = with pkgs.lib; {
             homepage = "https://github.com/aldur/clipshare";
             license = licenses.mit;
@@ -28,7 +28,7 @@
           pkgs.stdenv.mkDerivation {
             name = "clipshare-${name}";
             src = builtins.path {
-              path = ./.;
+              path = self;
               name = "source";
             };
             buildInputs = with pkgs; [ go ];
@@ -40,10 +40,8 @@
               touch $out
             '';
           };
-      in {
+      in rec {
         packages = {
-          default = self.packages.${system}.server;
-
           server = pkgs.buildGoModule (commonAttrs // {
             pname = "clipshare-server";
             meta = commonAttrs.meta // {
@@ -56,14 +54,21 @@
           });
 
           client = pkgs.buildGoModule (commonAttrs // {
-            pname = "clipshare-client";
+            pname = "clipshare";
             subPackages = [ "cmd/client" ];
             meta = commonAttrs.meta // {
               description = "clipshare client - simple REST clipboard service";
             };
             postInstall = ''
-              mv $out/bin/client $out/bin/clipshare-client
+              mv $out/bin/client $out/bin/clipshare
             '';
+          });
+          default = self.packages.${system}.client;
+
+          dockerImage = (pkgs.dockerTools.buildImage {
+            name = "clipshare-server";
+            tag = "latest";
+            copyToRoot = packages.server;
           });
         };
 
@@ -110,7 +115,7 @@
 
         overlays.default = final: prev: {
           clipshare-server = self.packages.${final.system}.server;
-          clipshare-client = self.packages.${final.system}.client;
+          clipshare = self.packages.${final.system}.client;
         };
       };
 }

@@ -5,16 +5,16 @@ with lib;
 let
   cfg = config.programs.clipshare;
 
-  clientWrapper = pkgs.writeShellScriptBin "clipshare-client" ''
-    export REST_CLIPBOARD_URL="${cfg.url}"
-    export REST_CLIPBOARD_DEVICE="${cfg.device}"
-    exec ${cfg.package}/bin/clipshare-client "$@"
+  clientWrapper = pkgs.writeShellScriptBin "clipshare" ''
+    export CLIPSHARE_DEVICE="${cfg.url}"
+    export CLIPSHARE_URL="${cfg.device}"
+    exec ${cfg.package}/bin/clipshare "$@"
   '';
 
   aliases = {
-    cb = "clipshare-client";
-    cb-get = "clipshare-client get";
-    cb-set = "clipshare-client set";
+    cs = "clipshare";
+    cs-get = "clipshare get";
+    cs-set = "clipshare set";
   };
 in {
   options.programs.clipshare = {
@@ -22,8 +22,8 @@ in {
 
     package = mkOption {
       type = types.package;
-      default = pkgs.clipshare-client;
-      defaultText = literalExpression "pkgs.clipshare-client";
+      default = pkgs.clipshare;
+      defaultText = literalExpression "pkgs.clipshare";
       description = "The clipshare client package to use.";
     };
 
@@ -52,8 +52,8 @@ in {
     home.packages = [ clientWrapper ];
 
     home.sessionVariables = {
-      REST_CLIPBOARD_URL = cfg.url;
-      REST_CLIPBOARD_DEVICE = cfg.device;
+      CLIPSHARE_URL = cfg.url;
+      CLIPSHARE_DEVICE = cfg.device;
     };
 
     home.shellAliases = mkIf enableAliases.enable aliases;

@@ -55,7 +55,7 @@ func runClient(t *testing.T, args ...string) (string, error) {
 	t.Helper()
 	
 	cmd := exec.Command("go", append([]string{"run", "cmd/client/main.go"}, args...)...)
-	cmd.Env = append(os.Environ(), "REST_CLIPBOARD_URL="+testURL)
+	cmd.Env = append(os.Environ(), "CLIPSHARE_URL="+testURL)
 	
 	output, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(output)), err
@@ -117,7 +117,7 @@ func TestClientServerIntegration(t *testing.T) {
 		
 		// Set clipboard content from stdin (auto-detected)
 		cmd := exec.Command("go", "run", "cmd/client/main.go", "set")
-		cmd.Env = append(os.Environ(), "REST_CLIPBOARD_URL="+testURL)
+		cmd.Env = append(os.Environ(), "CLIPSHARE_URL="+testURL)
 		cmd.Stdin = strings.NewReader(testText)
 		
 		_, err := cmd.CombinedOutput()
@@ -142,7 +142,7 @@ func TestClientServerIntegration(t *testing.T) {
 		
 		// Set clipboard content from stdin (explicit)
 		cmd := exec.Command("go", "run", "cmd/client/main.go", "set", "-")
-		cmd.Env = append(os.Environ(), "REST_CLIPBOARD_URL="+testURL)
+		cmd.Env = append(os.Environ(), "CLIPSHARE_URL="+testURL)
 		cmd.Stdin = strings.NewReader(testText)
 		
 		_, err := cmd.CombinedOutput()
@@ -246,8 +246,8 @@ func TestClientEnvironmentVariables(t *testing.T) {
 		// Set clipboard with custom device via env var
 		cmd := exec.Command("go", "run", "cmd/client/main.go", "set", testText)
 		cmd.Env = append(os.Environ(), 
-			"REST_CLIPBOARD_URL="+testURL,
-			"REST_CLIPBOARD_DEVICE=env-device")
+			"CLIPSHARE_URL="+testURL,
+			"CLIPSHARE_DEVICE=env-device")
 		
 		_, err := cmd.CombinedOutput()
 		if err != nil {
@@ -270,7 +270,7 @@ func TestClientServerConnectionError(t *testing.T) {
 	// Test connection to non-existent server
 	t.Run("ConnectionError", func(t *testing.T) {
 		cmd := exec.Command("go", "run", "cmd/client/main.go", "get")
-		cmd.Env = append(os.Environ(), "REST_CLIPBOARD_URL=http://localhost:19999")
+		cmd.Env = append(os.Environ(), "CLIPSHARE_URL=http://localhost:19999")
 		
 		_, err := cmd.CombinedOutput()
 		if err == nil {
