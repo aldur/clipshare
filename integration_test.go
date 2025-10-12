@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -271,10 +273,141 @@ func TestClientServerConnectionError(t *testing.T) {
 	t.Run("ConnectionError", func(t *testing.T) {
 		cmd := exec.Command("go", "run", "cmd/client/main.go", "get")
 		cmd.Env = append(os.Environ(), "CLIPSHARE_URL=http://localhost:19999")
-		
+
 		_, err := cmd.CombinedOutput()
 		if err == nil {
 			t.Error("Expected error when connecting to non-existent server")
+		}
+	})
+}
+
+func TestWebInterfaceTemplateRendering(t *testing.T) {
+	cancel, err := startTestServer(t)
+	if err != nil {
+		t.Fatalf("Failed to start test server: %v", err)
+	}
+	defer cancel()
+
+	// Test 1: Empty clipboard renders correctly
+	t.Run("EmptyClipboardTemplate", func(t *testing.T) {
+		// Set empty clipboard
+		_, err := runClient(t, "set", "")
+		if err != nil {
+			t.Fatalf("Failed to set empty clipboard: %v", err)
+		}
+
+		// Fetch the web interface
+		resp, err := http.Get(testURL + "/")
+		if err != nil {
+			t.Fatalf("Failed to fetch web interface: %v", err)
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("Failed to read response body: %v", err)
+		}
+
+		html := string(body)
+
+		// Should contain the textarea with empty content
+		if !strings.Contains(html, `<textarea id="clipboardContent" readonly placeholder="Clipboard content will appear here..."></textarea>`) {
+			t.Error("Expected empty textarea in HTML")
+		}
+	})
+
+	// Test 2: Content in clipboard is rendered
+	t.Run("ClipboardContentRendered", func(t *testing.T) {
+		testText := "Hello from template test!"
+
+		// Set clipboard content
+		_, err := runClient(t, "set", testText)
+		if err != nil {
+			t.Fatalf("Failed to set clipboard: %v", err)
+		}
+
+		// Fetch the web interface
+		resp, err := http.Get(testURL + "/")
+		if err != nil {
+			t.Fatalf("Failed to fetch web interface: %v", err)
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("Failed to read response body: %v", err)
+		}
+
+		html := string(body)
+
+		// Should contain the test text inside the textarea
+		expectedTextarea := `<textarea id="clipboardContent" readonly placeholder="Clipboard content will appear here...">` + testText + `</textarea>`
+		if !strings.Contains(html, expectedTextarea) {
+			t.Errorf("Expected textarea with content %q in HTML, got:\n%s", testText, html)
+		}
+	})
+
+	// Test 3: HTML special characters are escaped
+	t.Run("HTMLEscaping", func(t *testing.T) {
+		testText := "<script>alert('xss')</script>"
+
+		// Set clipboard content with HTML
+		_, err := runClient(t, "set", testText)
+		if err != nil {
+			t.Fatalf("Failed to set clipboard: %v", err)
+		}
+
+		// Fetch the web interface
+		resp, err := http.Get(testURL + "/")
+		if err != nil {
+			t.Fatalf("Failed to fetch web interface: %v", err)
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("Failed to read response body: %v", err)
+		}
+
+		html := string(body)
+
+		// Should contain escaped HTML
+		if !strings.Contains(html, "&lt;script&gt;") {
+			t.Error("Expected HTML to be escaped in template")
+		}
+		// Should NOT contain the raw script tag
+		if bytes.Count(body, []byte("<script>")) > 1 {
+			t.Error("Expected script tag to be escaped, but found raw script tag")
+		}
+	})
+
+	// Test 4: Multiline content is preserved
+	t.Run("MultilineContent", func(t *testing.T) {
+		testText := "Line 1\nLine 2\nLine 3"
+
+		// Set clipboard content with newlines
+		_, err := runClient(t, "set", testText)
+		if err != nil {
+			t.Fatalf("Failed to set clipboard: %v", err)
+		}
+
+		// Fetch the web interface
+		resp, err := http.Get(testURL + "/")
+		if err != nil {
+			t.Fatalf("Failed to fetch web interface: %v", err)
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("Failed to read response body: %v", err)
+		}
+
+		html := string(body)
+
+		// Should contain the multiline text
+		if !strings.Contains(html, "Line 1\nLine 2\nLine 3") {
+			t.Error("Expected multiline content to be preserved in template")
 		}
 	})
 }

@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io"
 	"net/http"
 	"os"
@@ -78,8 +79,21 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+
+	tmpl, err := template.New("index").Parse(string(indexHTML))
+	if err != nil {
+		http.Error(w, "Error parsing template", http.StatusInternalServerError)
+		return
+	}
+
+	mu.RLock()
+	content := clipboard
+	mu.RUnlock()
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write(indexHTML)
+	if err := tmpl.Execute(w, content); err != nil {
+		http.Error(w, "Error rendering template", http.StatusInternalServerError)
+	}
 }
 
 func main() {
@@ -98,8 +112,8 @@ func main() {
 	http.HandleFunc("/", indexHandler)
 	http.HandleFunc("/clipboard", clipboardHandler)
 
-	fmt.Printf("Clipshare server starting on http://%s\n", addr)
+	fmt.Printf("clipshare-server starting on http://%s\n", addr)
 	if err := http.ListenAndServe(addr, nil); err != nil {
-		fmt.Printf("Server failed to start: %v\n", err)
+		fmt.Printf("clipshare-server failed to start: %v\n", err)
 	}
 }
