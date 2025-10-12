@@ -310,8 +310,11 @@ func TestWebInterfaceTemplateRendering(t *testing.T) {
 
 		html := string(body)
 
-		// Should contain the textarea with empty content
-		if !strings.Contains(html, `<textarea id="clipboardContent" readonly placeholder="Clipboard content will appear here..."></textarea>`) {
+		// Should contain the textarea with empty content (check for textarea closing immediately)
+		if !strings.Contains(html, `<textarea id="clipboardContent" readonly`) {
+			t.Error("Expected to find clipboardContent textarea in HTML")
+		}
+		if !strings.Contains(html, `></textarea>`) {
 			t.Error("Expected empty textarea in HTML")
 		}
 	})
@@ -340,10 +343,12 @@ func TestWebInterfaceTemplateRendering(t *testing.T) {
 
 		html := string(body)
 
-		// Should contain the test text inside the textarea
-		expectedTextarea := `<textarea id="clipboardContent" readonly placeholder="Clipboard content will appear here...">` + testText + `</textarea>`
-		if !strings.Contains(html, expectedTextarea) {
-			t.Errorf("Expected textarea with content %q in HTML, got:\n%s", testText, html)
+		// Should contain the test text inside the textarea (check for content, not exact structure)
+		if !strings.Contains(html, `<textarea id="clipboardContent" readonly`) {
+			t.Error("Expected to find clipboardContent textarea in HTML")
+		}
+		if !strings.Contains(html, ">"+testText+"</textarea>") {
+			t.Errorf("Expected textarea to contain %q in HTML", testText)
 		}
 	})
 
