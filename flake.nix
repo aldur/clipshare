@@ -6,8 +6,14 @@
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
-    flake-utils.lib.eachDefaultSystem (system:
+  outputs =
+    {
+      self,
+      nixpkgs,
+      flake-utils,
+    }:
+    flake-utils.lib.eachDefaultSystem (
+      system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
 
@@ -24,7 +30,8 @@
         };
 
         # Helper function to create test derivations
-        mkTest = name: testCommand:
+        mkTest =
+          name: testCommand:
           pkgs.stdenv.mkDerivation {
             name = "clipshare-${name}";
             src = builtins.path {
@@ -40,9 +47,10 @@
               touch $out
             '';
           };
-      in rec {
-        packages = {
-          server = pkgs.buildGoModule (commonAttrs // {
+
+        server = pkgs.buildGoModule (
+          commonAttrs
+          // {
             pname = "clipshare-server";
             meta = commonAttrs.meta // {
               description = "clipshare server - simple REST clipboard service";
@@ -51,9 +59,12 @@
             postInstall = ''
               mv $out/bin/clipshare $out/bin/clipshare-server
             '';
-          });
+          }
+        );
 
-          client = pkgs.buildGoModule (commonAttrs // {
+        client = pkgs.buildGoModule (
+          commonAttrs
+          // {
             pname = "clipshare";
             subPackages = [ "cmd/client" ];
             meta = commonAttrs.meta // {
@@ -62,18 +73,28 @@
             postInstall = ''
               mv $out/bin/client $out/bin/clipshare
             '';
-          });
-          default = self.packages.${system}.client;
+          }
+        );
+      in
+      {
+        packages = {
+          inherit client server;
+          default = client;
 
-          dockerImage = (pkgs.dockerTools.buildImage {
+          dockerImage = pkgs.dockerTools.buildImage {
             name = "clipshare-server";
             tag = "latest";
-            copyToRoot = packages.server;
-          });
+            copyToRoot = server;
+          };
         };
 
         devShells.default = pkgs.mkShell {
-          buildInputs = with pkgs; [ go gopls gotools go-tools ];
+          buildInputs = with pkgs; [
+            go
+            gopls
+            gotools
+            go-tools
+          ];
         };
 
         checks = {
@@ -81,12 +102,17 @@
           unit-tests = mkTest "unit-tests" "go test -v ./...";
 
           # Integration tests
-          integration-tests = mkTest "integration-tests"
-            ''go test -v -run "^TestClientServer" ./...'';
+          integration-tests = mkTest "integration-tests" ''go test -v -run "^TestClientServer" ./...'';
 
           # Build tests - ensure packages build successfully
           build-server = self.packages.${system}.server;
           build-client = self.packages.${system}.client;
+
+          # NixOS module tests
+          nixos-module-tests = (import ./nix/nixos-module-test.nix { inherit pkgs; }).allTests;
+
+          # Home Manager module tests
+          home-manager-module-tests = (import ./nix/home-manager-module-test.nix { inherit pkgs; }).allTests;
 
           # Lint and format checks
           lint = mkTest "lint" ''
@@ -101,22 +127,42 @@
             fi
           '';
         };
-      }) // {
-        nixosModules.default = { config, lib, pkgs, ... }: {
+      }
+    )
+    // {
+      nixosModules.default =
+        {
+          config,
+          lib,
+          pkgs,
+          ...
+        }:
+        {
           imports = [ ./nix/nixos-module.nix ];
           nixpkgs.overlays = [ self.overlays.default ];
         };
 
-        homeManagerModules.default = { config, osConfig, lib, pkgs, ... }: {
+      homeManagerModules.default =
+        {
+          config,
+          osConfig,
+          lib,
+          pkgs,
+          ...
+        }:
+        {
           imports = [ ./nix/home-manager-module.nix ];
-          nixpkgs.overlays = lib.mkIf (!osConfig.home-manager.useGlobalPkgs)
-            [ self.overlays.default ];
+          nixpkgs.overlays = [ self.overlays.default ];
         };
 
-        overlays.default = final: prev: {
-          clipshare-server = self.packages.${final.system}.server;
-          clipshare = self.packages.${final.system}.client;
+      overlays.default =
+        final: prev:
+        let
+          inherit (final.stdenv.hostPlatform) system;
+        in
+        {
+          clipshare-server = self.packages.${system}.server;
+          clipshare = self.packages.${system}.client;
         };
-      };
+    };
 }
-

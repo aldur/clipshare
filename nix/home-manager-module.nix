@@ -1,13 +1,23 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 with lib;
 
 let
   cfg = config.programs.clipshare;
 
+  # Build environment variable exports only for configured options
+  envExports = concatStringsSep "\n" (
+    optional (cfg.url != null) ''export CLIPSHARE_URL="${cfg.url}"''
+    ++ optional (cfg.device != null) ''export CLIPSHARE_DEVICE="${cfg.device}"''
+  );
+
   clientWrapper = pkgs.writeShellScriptBin "clipshare" ''
-    export CLIPSHARE_DEVICE="${cfg.url}"
-    export CLIPSHARE_URL="${cfg.device}"
+    ${envExports}
     exec ${cfg.package}/bin/clipshare "$@"
   '';
 
@@ -16,7 +26,8 @@ let
     cs-get = "clipshare get";
     cs-set = "clipshare set";
   };
-in {
+in
+{
   options.programs.clipshare = {
     enable = mkEnableOption "clipshare client";
 
@@ -28,17 +39,16 @@ in {
     };
 
     url = mkOption {
-      type = types.str;
-      default = "http://localhost:8080";
-      description = "URL of the clipshare server.";
+      type = types.nullOr types.str;
+      default = null;
+      description = "URL of the clipshare server. If not set, no CLIPSHARE_URL environment variable will be exported.";
     };
 
     device = mkOption {
-      type = types.str;
-      default = config.networking.hostName or "unknown";
-      defaultText =
-        literalExpression ''config.networking.hostName or "unknown"'';
-      description = "Device name to use when setting clipboard content.";
+      type = types.nullOr types.str;
+      default = config.networking.hostName or null;
+      defaultText = literalExpression "config.networking.hostName or null";
+      description = "Device name to use when setting clipboard content. Defaults to the hostname. If null, no CLIPSHARE_DEVICE environment variable will be exported.";
     };
 
     enableAliases = mkOption {
@@ -49,14 +59,14 @@ in {
   };
 
   config = mkIf cfg.enable {
-    home.packages = [ clientWrapper ];
+    home = {
+      packages = [ clientWrapper ];
 
-    home.sessionVariables = {
-      CLIPSHARE_URL = cfg.url;
-      CLIPSHARE_DEVICE = cfg.device;
+      sessionVariables =
+        optionalAttrs (cfg.url != null) { CLIPSHARE_URL = cfg.url; }
+        // optionalAttrs (cfg.device != null) { CLIPSHARE_DEVICE = cfg.device; };
+
+      shellAliases = mkIf cfg.enableAliases aliases;
     };
-
-    home.shellAliases = mkIf enableAliases.enable aliases;
   };
 }
-
