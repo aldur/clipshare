@@ -130,29 +130,16 @@
       }
     )
     // {
-      nixosModules.default =
-        {
-          config,
-          lib,
-          pkgs,
-          ...
-        }:
-        {
-          imports = [ ./nix/nixos-module.nix ];
-          nixpkgs.overlays = [ self.overlays.default ];
-        };
+      nixosModules.default = _: {
+        imports = [ ./nix/nixos-module.nix ];
+        nixpkgs.overlays = [ self.overlays.default ];
+      };
 
       homeManagerModules.default =
+        { pkgs, ... }:
         {
-          config,
-          osConfig,
-          lib,
-          pkgs,
-          ...
-        }:
-        {
+          _module.args.clipsharePackage = self.packages.${pkgs.stdenv.hostPlatform.system}.client;
           imports = [ ./nix/home-manager-module.nix ];
-          nixpkgs.overlays = [ self.overlays.default ];
         };
 
       overlays.default =

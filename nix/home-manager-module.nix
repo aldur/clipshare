@@ -2,6 +2,7 @@
   config,
   lib,
   pkgs,
+  clipsharePackage ? null,
   ...
 }:
 
@@ -33,7 +34,7 @@ in
 
     package = mkOption {
       type = types.package;
-      default = pkgs.clipshare;
+      default = if clipsharePackage != null then clipsharePackage else pkgs.clipshare;
       defaultText = literalExpression "pkgs.clipshare";
       description = "The clipshare client package to use.";
     };
