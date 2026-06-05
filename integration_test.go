@@ -1,3 +1,12 @@
+//go:build integration
+
+// These end-to-end tests spawn the server and client via `go run` and poll a
+// TCP port, so they need a writable, network-local environment.  They run
+// under the dedicated `integration-tests` flake check (which passes
+// `-tags integration`); they are tagged out of the default `go test ./...` so
+// the buildGoModule package checkPhase — whose environment makes the child
+// `go run` fail to bind in time — builds cleanly on just the in-process unit
+// tests in main_test.go.
 package main
 
 import (
@@ -34,8 +43,13 @@ func startTestServer(t *testing.T) (context.CancelFunc, error) {
 		return nil, fmt.Errorf("failed to start server: %w", err)
 	}
 	
-	// Wait for server to be ready
-	for i := 0; i < 30; i++ {
+	// Wait for the server to be ready.  The child `go run` has to compile
+	// main.go before it can bind the port; under a cold Go build cache or a
+	// loaded machine that can take several seconds, so poll against a generous
+	// deadline (breaking as soon as it answers) rather than a tight 3 s budget
+	// that turns a slow compile into a spurious failure.
+	deadline := time.Now().Add(30 * time.Second)
+	for {
 		resp, err := http.Get(testURL + "/clipboard")
 		if err == nil {
 			resp.Body.Close()
@@ -43,11 +57,11 @@ func startTestServer(t *testing.T) (context.CancelFunc, error) {
 				break
 			}
 		}
-		time.Sleep(100 * time.Millisecond)
-		if i == 29 {
+		if time.Now().After(deadline) {
 			cancel()
 			return nil, fmt.Errorf("server did not start within timeout")
 		}
+		time.Sleep(100 * time.Millisecond)
 	}
 	
 	return cancel, nil

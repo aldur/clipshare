@@ -98,11 +98,13 @@
         };
 
         checks = {
-          # Unit tests
+          # Unit tests — in-process httptest, no subprocesses.  The `integration`
+          # build tag is off, so integration_test.go is excluded here.
           unit-tests = mkTest "unit-tests" "go test -v ./...";
 
-          # Integration tests
-          integration-tests = mkTest "integration-tests" ''go test -v -run "^TestClientServer" ./...'';
+          # Integration tests — opt in to the `integration` build tag to compile
+          # and run the end-to-end cases that spawn the server/client.
+          integration-tests = mkTest "integration-tests" ''go test -v -tags integration ./...'';
 
           # Build tests - ensure packages build successfully
           build-server = self.packages.${system}.server;
