@@ -3,170 +3,358 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
     <title>Clipshare</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
+        :root {
+            color-scheme: light dark;
+            --background: #fff;
+            --inset: #f6f7f8;
+            --text: #202124;
+            --muted: #62666d;
+            --border: #d5d8dc;
+            --accent: #205bc1;
+            --accent-hover: #17499f;
+            --error: #b3261e;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+        * { box-sizing: border-box; }
+        [hidden] { display: none !important; }
+        body { margin: 0; color: var(--text); background: var(--background); font-size: 14px; line-height: 1.5; }
+        button, input, textarea { font: inherit; }
+        button, input, textarea, pre, .preview { border-radius: 5px; }
+        button { cursor: pointer; }
+        button:disabled { cursor: default; opacity: .45; }
+        button[aria-disabled="true"] { cursor: wait; opacity: .65; }
+        :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+        .shell { max-width: 720px; margin: auto; padding: 24px 24px 32px; }
+        header { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px 20px; }
+        h1 { margin: 0; font-size: 24px; font-weight: 650; letter-spacing: -.5px; }
+        header p { margin: 0; color: var(--muted); font-size: 12px; }
+        section { margin-top: 20px; }
+        .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+        h2 { margin: 0; font-size: 16px; font-weight: 600; }
+        .clipboard-tools { display: flex; align-items: center; gap: 16px; }
+        #clipboardState { color: var(--muted); font-size: 12px; }
+        .refresh { padding: 4px 0; border: 0; color: var(--accent); background: transparent; font-size: 12px; }
+        .refresh:hover:not(:disabled) { text-decoration: underline; }
+        .preview { display: grid; place-items: center; height: 96px; border: 1px solid var(--border); background: var(--inset); color: var(--muted); }
+        .preview p { margin: 0; padding: 12px; }
+        .preview-reveal { display: grid; align-content: center; gap: 4px; width: 100%; height: 100%; padding: 12px; border: 0; background: transparent; color: var(--muted); }
+        .preview-reveal:hover:not([aria-disabled="true"]) { background: var(--background); }
+        .preview-action { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+        pre {
+            height: 96px;
             margin: 0;
-            padding: 20px;
-            background-color: #f5f5f5;
-            line-height: 1.6;
+            padding: 12px;
+            overflow: auto;
+            border: 1px solid var(--border);
+            background: var(--inset);
+            font: 14px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
         }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background-color: white;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        .actions { display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: center; gap: 8px; min-height: 44px; margin-top: 8px; }
+        .button { min-height: 40px; padding: 8px 18px; border: 1px solid var(--border); background: var(--background); color: var(--text); font-weight: 500; }
+        .button:hover:not(:disabled):not([aria-disabled="true"]) { background: var(--inset); }
+        .primary { border-color: var(--accent); background: var(--accent); color: #fff; }
+        .primary:hover:not(:disabled):not([aria-disabled="true"]) { border-color: var(--accent-hover); background: var(--accent-hover); }
+        .send-section { padding-top: 20px; border-top: 1px solid var(--border); }
+        .send-section h2 { margin-bottom: 12px; }
+        label { display: block; margin-bottom: 6px; font-size: 13px; }
+        .optional { color: var(--muted); }
+        input, textarea { display: block; width: 100%; padding: 10px 12px; border: 1px solid var(--border); background: var(--background); color: var(--text); }
+        input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
+        textarea { min-height: 128px; resize: vertical; }
+        input { min-height: 40px; }
+        .send-options { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-top: 14px; }
+        .device-field { flex: 1; max-width: 240px; min-width: 0; }
+        .status { margin: 10px 0 0; font-size: 13px; overflow-wrap: anywhere; }
+        .status:empty { display: none; }
+        #copyStatus { min-width: 0; margin: 0; font-size: 12px; line-height: 1.2; }
+        .status.error { color: var(--error); }
+        noscript p { padding: 12px; border: 1px solid var(--border); }
+        @media (max-width: 420px) {
+            .shell { padding: 20px 16px 24px; }
+            header { display: block; }
+            header p { margin-top: 6px; }
+            .clipboard-tools { gap: 12px; }
         }
-        h1 {
-            color: #333;
-            text-align: center;
-        }
-        .section {
-            margin: 30px 0;
-            padding: 20px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-
-            h2 {
-                margin-top: 0;
-                color: #555;
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --background: #1c1d20;
+                --inset: #24262a;
+                --text: #e8eaed;
+                --muted: #a9adb4;
+                --border: #484c53;
+                --accent: #a3c3ff;
+                --accent-hover: #bed4ff;
+                --error: #ffa8a1;
             }
-        }
-        textarea,
-        input[type="text"] {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-family: monospace;
-            box-sizing: border-box; /* Ensures padding doesn't affect final width */
-        }
-        textarea {
-            height: 150px;
-            resize: vertical;
-        }
-        button {
-            background-color: #007bff;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            margin: 5px;
-            width: 100%; /* Full-width for mobile-first approach */
-
-            &:hover {
-                background-color: #0056b3;
-            }
-
-            /* Media Query for larger screens, using nesting */
-            @media (min-width: 600px) {
-                width: auto; /* Revert to auto width on larger screens */
-            }
-        }
-        .status {
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 4px;
-            display: none;
-
-            &.success {
-                background-color: #d4edda;
-                color: #155724;
-                border: 1px solid #c3e6cb;
-            }
-            &.error {
-                background-color: #f8d7da;
-                color: #721c24;
-                border: 1px solid #f5c6cb;
-            }
+            .primary { color: #152440; }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Clipshare</h1>
-        
-        <div class="section">
-            <h2>Clipboard Content</h2>
-            <textarea id="clipboardContent" readonly placeholder="(clipboard is empty)">{{.}}</textarea>
-            <button onclick="copyToClipboard()">Copy to System Clipboard</button>
-            <div id="copyStatus" class="status"></div>
-        </div>
-        
-        <div class="section">
-            <h2>Set Clipboard Content</h2>
-            <textarea id="newContent" placeholder="Enter text to store in clipboard..."></textarea>
-            <input type="text" id="deviceName" placeholder="Device name (optional, defaults to 'web')" value="web">
-            <button onclick="setClipboard()">Set Clipboard</button>
-            <div id="setStatus" class="status"></div>
-        </div>
+    <div class="shell">
+        <header>
+            <h1>Clipshare</h1>
+            <p>Text clears after 60 seconds.</p>
+        </header>
+        <main>
+            <noscript><p>Enable JavaScript to use the clipboard.</p></noscript>
+            <section aria-labelledby="receiveHeading">
+                <div class="section-heading">
+                    <h2 id="receiveHeading">Clipboard</h2>
+                    <div class="clipboard-tools">
+                        <span id="clipboardState" role="status" aria-live="polite">Checking…</span>
+                        <button id="refreshButton" class="refresh" type="button">Refresh</button>
+                    </div>
+                </div>
+                <div id="hiddenPreview" class="preview">
+                    <p id="previewMessage">Checking clipboard…</p>
+                    <button id="previewButton" class="preview-reveal" type="button" aria-controls="clipboardContent" aria-expanded="false" hidden>
+                        <span>Text is hidden.</span>
+                        <span id="previewAction" class="preview-action">Show text</span>
+                    </button>
+                </div>
+                <pre id="clipboardContent" tabindex="0" aria-label="Shared clipboard text" hidden></pre>
+                <div class="actions">
+                    <button id="copyButton" class="button primary" type="button" disabled>Copy</button>
+                    <button id="revealButton" class="button" type="button" aria-controls="clipboardContent" aria-expanded="false" disabled>Show</button>
+                    <p id="copyStatus" class="status" role="status" aria-live="polite" aria-atomic="true"></p>
+                </div>
+            </section>
+            <section class="send-section" aria-labelledby="sendHeading">
+                <h2 id="sendHeading">Send text</h2>
+                <form id="sendForm">
+                    <label for="newContent">Text</label>
+                    <textarea id="newContent" name="text" placeholder="Paste or type text" required></textarea>
+                    <div class="send-options">
+                        <div class="device-field">
+                            <label for="deviceName">Device name <span class="optional">(optional)</span></label>
+                            <input type="text" id="deviceName" name="device" placeholder="web" autocomplete="off">
+                        </div>
+                        <button id="sendButton" class="button primary" type="submit">Send</button>
+                    </div>
+                    <p id="setStatus" class="status" role="status" aria-live="polite" aria-atomic="true"></p>
+                </form>
+            </section>
+        </main>
     </div>
-
     <script>
-        function showStatus(elementId, message, isSuccess) {
-            const statusEl = document.getElementById(elementId);
-            statusEl.textContent = message;
-            statusEl.className = `status ${isSuccess ? 'success' : 'error'}`;
-            statusEl.style.display = 'block';
-            setTimeout(() => {
-                statusEl.style.display = 'none';
-            }, 3000);
+        const copyButton = document.getElementById('copyButton');
+        const revealButton = document.getElementById('revealButton');
+        const refreshButton = document.getElementById('refreshButton');
+        const sendButton = document.getElementById('sendButton');
+        const clipboardContent = document.getElementById('clipboardContent');
+        const hiddenPreview = document.getElementById('hiddenPreview');
+        const previewButton = document.getElementById('previewButton');
+        const previewAction = document.getElementById('previewAction');
+        const clipboardState = document.getElementById('clipboardState');
+        const previewMessage = document.getElementById('previewMessage');
+        const newContent = document.getElementById('newContent');
+        let clipboardEmpty = null;
+        let copying = false;
+        let revealing = false;
+        let checking = false;
+        let previewTimer;
+        let previewGeneration = 0;
+        let stateGeneration = 0;
+
+        function showStatus(elementId, message, isSuccess = true) {
+            const status = document.getElementById(elementId);
+            status.textContent = message;
+            status.classList.toggle('error', !isSuccess);
         }
 
-        async function copyToClipboard() {
-            const text = document.getElementById('clipboardContent').value;
+        function updateButtons() {
+            copyButton.disabled = clipboardEmpty !== false || copying;
+            revealButton.disabled = clipboardEmpty !== false;
+            revealButton.setAttribute('aria-disabled', String(revealing));
+            previewButton.setAttribute('aria-disabled', String(revealing));
+            previewAction.textContent = revealing ? 'Loading…' : 'Show text';
+            refreshButton.disabled = checking;
+        }
 
-            if (!text) {
-                showStatus('copyStatus', 'No content to copy', false);
-                return;
-            }
+        function hideContent() {
+            previewGeneration++;
+            clearTimeout(previewTimer);
+            clipboardContent.hidden = true;
+            clipboardContent.textContent = '';
+            hiddenPreview.hidden = false;
+            revealButton.textContent = 'Show';
+            revealButton.setAttribute('aria-expanded', 'false');
+            previewButton.setAttribute('aria-expanded', 'false');
+            showStatus('copyStatus', '');
+        }
 
+        function setAvailability(empty) {
+            if (clipboardEmpty === empty) return;
+            clipboardEmpty = empty;
+            clipboardState.textContent = empty ? 'Empty' : 'Text available';
+            previewMessage.textContent = empty ? 'Clipboard is empty.' : '';
+            previewMessage.hidden = !empty;
+            previewButton.hidden = empty;
+            if (empty) hideContent();
+            updateButtons();
+        }
+
+        async function refreshClipboard() {
+            if (checking || document.hidden) return;
+            checking = true;
+            updateButtons();
+            const generation = stateGeneration;
             try {
-                await navigator.clipboard.writeText(text);
-                showStatus('copyStatus', 'Copied to system clipboard!', true);
+                const response = await fetch('/clipboard', { method: 'HEAD', cache: 'no-store' });
+                if (!response.ok || response.headers.get('Content-Length') === null) {
+                    throw new Error('Could not check the clipboard.');
+                }
+                if (generation === stateGeneration) {
+                    setAvailability(response.headers.get('Content-Length') === '0');
+                }
             } catch (error) {
-                showStatus('copyStatus', `Failed to copy: ${error.message}`, false);
+                if (generation === stateGeneration) {
+                    clipboardEmpty = null;
+                    hideContent();
+                    clipboardState.textContent = 'Unavailable';
+                    previewMessage.textContent = 'Could not check the clipboard. Use Refresh to try again.';
+                    previewMessage.hidden = false;
+                    previewButton.hidden = true;
+                }
+            } finally {
+                checking = false;
+                updateButtons();
             }
         }
 
+        async function fetchClipboard() {
+            const generation = stateGeneration;
+            const response = await fetch('/clipboard', { cache: 'no-store' });
+            if (!response.ok) {
+                throw new Error(`Could not get text (HTTP ${response.status}).`);
+            }
+            const text = await response.text();
+            if (generation === stateGeneration) {
+                stateGeneration++;
+                setAvailability(text.length === 0);
+            }
+            if (!text) throw new Error('Clipboard is empty.');
+            return text;
+        }
 
-        async function setClipboard() {
-            const text = document.getElementById('newContent').value;
-            const device = document.getElementById('deviceName').value || 'web';
-            
-            if (!text.trim()) {
-                showStatus('setStatus', 'Please enter some text to store', false);
+        copyButton.addEventListener('click', async () => {
+            if (!navigator.clipboard) {
+                showStatus('copyStatus', 'Copy unavailable. Use HTTPS or Show.', false);
                 return;
             }
+            copying = true;
+            updateButtons();
+            showStatus('copyStatus', 'Copying…');
+            let readError;
+            try {
+                const text = fetchClipboard().catch(error => {
+                    readError = error;
+                    throw error;
+                });
+                if (typeof ClipboardItem !== 'undefined' && navigator.clipboard.write) {
+                    // Start the write during the click to keep browser permission.
+                    const data = text.then(value => new Blob([value], { type: 'text/plain' }));
+                    await Promise.all([data, navigator.clipboard.write([new ClipboardItem({ 'text/plain': data })])]);
+                } else {
+                    await navigator.clipboard.writeText(await text);
+                }
+                showStatus('copyStatus', 'Copied.');
+            } catch (error) {
+                const message = readError ? readError.message : 'Copy failed. Use Show to copy manually.';
+                showStatus('copyStatus', clipboardEmpty === true ? '' : message, false);
+            } finally {
+                copying = false;
+                updateButtons();
+            }
+        });
 
+        async function toggleContent() {
+            if (revealing || clipboardEmpty !== false) return;
+            if (!clipboardContent.hidden) {
+                hideContent();
+                return;
+            }
+            revealing = true;
+            updateButtons();
+            const generation = ++previewGeneration;
+            showStatus('copyStatus', 'Loading…');
+            try {
+                const text = await fetchClipboard();
+                if (generation !== previewGeneration || document.hidden) return;
+                clipboardContent.textContent = text;
+                clipboardContent.hidden = false;
+                const previewHadFocus = document.activeElement === previewButton;
+                hiddenPreview.hidden = true;
+                revealButton.textContent = 'Hide';
+                revealButton.setAttribute('aria-expanded', 'true');
+                previewButton.setAttribute('aria-expanded', 'true');
+                if (previewHadFocus) revealButton.focus({ preventScroll: true });
+                previewTimer = setTimeout(hideContent, 60000);
+                showStatus('copyStatus', '');
+            } catch (error) {
+                if (generation !== previewGeneration || document.hidden) return;
+                showStatus('copyStatus', clipboardEmpty === true ? '' : error.message, false);
+            } finally {
+                revealing = false;
+                updateButtons();
+            }
+        }
+
+        revealButton.addEventListener('click', toggleContent);
+        previewButton.addEventListener('click', toggleContent);
+
+        document.getElementById('sendForm').addEventListener('submit', async event => {
+            event.preventDefault();
+            const text = newContent.value;
+            if (!text.trim()) {
+                showStatus('setStatus', 'Enter some text.', false);
+                newContent.focus();
+                return;
+            }
+            sendButton.disabled = true;
+            showStatus('setStatus', 'Sending…');
             try {
                 const response = await fetch('/clipboard', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        text: text,
-                        device: device
+                        text,
+                        device: document.getElementById('deviceName').value.trim() || 'web'
                     })
                 });
-
-                if (response.ok) {
-                    showStatus('setStatus', 'Clipboard content saved successfully', true);
-                    document.getElementById('newContent').value = '';
-                    location.reload();
-                } else {
-                    showStatus('setStatus', `Error: ${response.status} ${response.statusText}`, false);
+                if (!response.ok) {
+                    throw new Error(`Could not send text (HTTP ${response.status}).`);
                 }
+                stateGeneration++;
+                setAvailability(false);
+                newContent.value = '';
+                hideContent();
+                showStatus('setStatus', 'Sent.');
             } catch (error) {
-                showStatus('setStatus', `Error: ${error.message}`, false);
+                showStatus('setStatus', error.message, false);
+            } finally {
+                sendButton.disabled = false;
             }
-        }
+        });
 
+        refreshButton.addEventListener('click', () => {
+            hideContent();
+            refreshClipboard();
+        });
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) hideContent();
+            else refreshClipboard();
+        });
+        window.addEventListener('pagehide', hideContent);
+        window.addEventListener('pageshow', refreshClipboard);
+        setInterval(refreshClipboard, 5000);
+        refreshClipboard();
     </script>
 </body>
 </html>

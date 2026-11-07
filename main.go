@@ -4,10 +4,10 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -29,11 +29,16 @@ var (
 
 func clipboardHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
-	case http.MethodGet:
+	case http.MethodGet, http.MethodHead:
 		mu.RLock()
 		defer mu.RUnlock()
 
 		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Length", strconv.Itoa(len(clipboard)))
+		if r.Method == http.MethodHead {
+			return
+		}
 		w.Write([]byte(clipboard))
 
 	case http.MethodPost:
@@ -80,20 +85,9 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tmpl, err := template.New("index").Parse(string(indexHTML))
-	if err != nil {
-		http.Error(w, "Error parsing template", http.StatusInternalServerError)
-		return
-	}
-
-	mu.RLock()
-	content := clipboard
-	mu.RUnlock()
-
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.Execute(w, content); err != nil {
-		http.Error(w, "Error rendering template", http.StatusInternalServerError)
-	}
+	w.Header().Set("Cache-Control", "no-store")
+	w.Write(indexHTML)
 }
 
 func main() {

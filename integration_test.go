@@ -295,138 +295,64 @@ func TestClientServerConnectionError(t *testing.T) {
 	})
 }
 
-func TestWebInterfaceTemplateRendering(t *testing.T) {
+func TestWebInterfaceKeepsClipboardHidden(t *testing.T) {
 	cancel, err := startTestServer(t)
 	if err != nil {
-		t.Fatalf("Failed to start test server: %v", err)
+		t.Fatalf("failed to start test server: %v", err)
 	}
 	defer cancel()
 
-	// Test 1: Empty clipboard renders correctly
-	t.Run("EmptyClipboardTemplate", func(t *testing.T) {
-		// Set empty clipboard
-		_, err := runClient(t, "set", "")
-		if err != nil {
-			t.Fatalf("Failed to set empty clipboard: %v", err)
-		}
+	for _, tt := range []struct {
+		name string
+		text string
+	}{
+		{name: "empty"},
+		{name: "plain text", text: "private clipboard text"},
+		{name: "HTML", text: "<script>alert('private')</script>"},
+		{name: "multiline", text: "Line 1\nLine 2\nLine 3"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := runClient(t, "set", tt.text); err != nil {
+				t.Fatalf("failed to set clipboard: %v", err)
+			}
 
-		// Fetch the web interface
-		resp, err := http.Get(testURL + "/")
-		if err != nil {
-			t.Fatalf("Failed to fetch web interface: %v", err)
-		}
-		defer resp.Body.Close()
+			resp, err := http.Get(testURL + "/")
+			if err != nil {
+				t.Fatalf("failed to fetch page: %v", err)
+			}
+			defer resp.Body.Close()
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatalf("failed to read page: %v", err)
+			}
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("expected status %d, got %d", http.StatusOK, resp.StatusCode)
+			}
+			if !bytes.Equal(body, indexHTML) {
+				t.Error("expected the page without clipboard content")
+			}
+			if resp.Header.Get("Cache-Control") != "no-store" {
+				t.Error("expected Cache-Control no-store")
+			}
 
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			t.Fatalf("Failed to read response body: %v", err)
-		}
-
-		html := string(body)
-
-		// Should contain the textarea with empty content (check for textarea closing immediately)
-		if !strings.Contains(html, `<textarea id="clipboardContent" readonly`) {
-			t.Error("Expected to find clipboardContent textarea in HTML")
-		}
-		if !strings.Contains(html, `></textarea>`) {
-			t.Error("Expected empty textarea in HTML")
-		}
-	})
-
-	// Test 2: Content in clipboard is rendered
-	t.Run("ClipboardContentRendered", func(t *testing.T) {
-		testText := "Hello from template test!"
-
-		// Set clipboard content
-		_, err := runClient(t, "set", testText)
-		if err != nil {
-			t.Fatalf("Failed to set clipboard: %v", err)
-		}
-
-		// Fetch the web interface
-		resp, err := http.Get(testURL + "/")
-		if err != nil {
-			t.Fatalf("Failed to fetch web interface: %v", err)
-		}
-		defer resp.Body.Close()
-
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			t.Fatalf("Failed to read response body: %v", err)
-		}
-
-		html := string(body)
-
-		// Should contain the test text inside the textarea (check for content, not exact structure)
-		if !strings.Contains(html, `<textarea id="clipboardContent" readonly`) {
-			t.Error("Expected to find clipboardContent textarea in HTML")
-		}
-		if !strings.Contains(html, ">"+testText+"</textarea>") {
-			t.Errorf("Expected textarea to contain %q in HTML", testText)
-		}
-	})
-
-	// Test 3: HTML special characters are escaped
-	t.Run("HTMLEscaping", func(t *testing.T) {
-		testText := "<script>alert('xss')</script>"
-
-		// Set clipboard content with HTML
-		_, err := runClient(t, "set", testText)
-		if err != nil {
-			t.Fatalf("Failed to set clipboard: %v", err)
-		}
-
-		// Fetch the web interface
-		resp, err := http.Get(testURL + "/")
-		if err != nil {
-			t.Fatalf("Failed to fetch web interface: %v", err)
-		}
-		defer resp.Body.Close()
-
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			t.Fatalf("Failed to read response body: %v", err)
-		}
-
-		html := string(body)
-
-		// Should contain escaped HTML
-		if !strings.Contains(html, "&lt;script&gt;") {
-			t.Error("Expected HTML to be escaped in template")
-		}
-		// Should NOT contain the raw script tag
-		if bytes.Count(body, []byte("<script>")) > 1 {
-			t.Error("Expected script tag to be escaped, but found raw script tag")
-		}
-	})
-
-	// Test 4: Multiline content is preserved
-	t.Run("MultilineContent", func(t *testing.T) {
-		testText := "Line 1\nLine 2\nLine 3"
-
-		// Set clipboard content with newlines
-		_, err := runClient(t, "set", testText)
-		if err != nil {
-			t.Fatalf("Failed to set clipboard: %v", err)
-		}
-
-		// Fetch the web interface
-		resp, err := http.Get(testURL + "/")
-		if err != nil {
-			t.Fatalf("Failed to fetch web interface: %v", err)
-		}
-		defer resp.Body.Close()
-
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			t.Fatalf("Failed to read response body: %v", err)
-		}
-
-		html := string(body)
-
-		// Should contain the multiline text
-		if !strings.Contains(html, "Line 1\nLine 2\nLine 3") {
-			t.Error("Expected multiline content to be preserved in template")
-		}
-	})
+			resp, err = http.Get(testURL + "/clipboard")
+			if err != nil {
+				t.Fatalf("failed to get clipboard: %v", err)
+			}
+			defer resp.Body.Close()
+			body, err = io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatalf("failed to read clipboard: %v", err)
+			}
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("expected status %d, got %d", http.StatusOK, resp.StatusCode)
+			}
+			if string(body) != tt.text {
+				t.Errorf("expected clipboard %q, got %q", tt.text, body)
+			}
+			if resp.Header.Get("Cache-Control") != "no-store" {
+				t.Error("expected Cache-Control no-store")
+			}
+		})
+	}
 }

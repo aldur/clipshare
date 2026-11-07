@@ -27,6 +27,21 @@ paths:
                 type: string
               example: "<html><body><h1>Clipshare</h1></body></html>"
   /clipboard:
+    head:
+      summary: Check if the clipboard has text
+      description: Get the text length without the text.
+      operationId: headClipboard
+      tags:
+        - clipboard
+      responses:
+        '200':
+          description: Clipboard status without a response body
+          headers:
+            Content-Length:
+              description: Text length in bytes. Zero means the clipboard is empty.
+              schema:
+                type: integer
+                minimum: 0
     get:
       summary: Get the clipboard content
       description: Get the current clipboard content.

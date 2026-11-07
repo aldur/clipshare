@@ -7,11 +7,41 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strconv"
 	"testing"
 	"time"
 )
 
-func TestClipboardGet(t *testing.T) {
+func TestIndexDoesNotIncludeClipboard(t *testing.T) {
+	for _, text := range []string{"private clipboard text", "</pre><script>alert('private')</script>"} {
+		t.Run(text, func(t *testing.T) {
+			mu.Lock()
+			previous := clipboard
+			clipboard = text
+			mu.Unlock()
+			t.Cleanup(func() {
+				mu.Lock()
+				clipboard = previous
+				mu.Unlock()
+			})
+
+			w := httptest.NewRecorder()
+			indexHandler(w, httptest.NewRequest(http.MethodGet, "/", nil))
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected status %d, got %d", http.StatusOK, w.Code)
+			}
+			if !bytes.Equal(w.Body.Bytes(), indexHTML) {
+				t.Error("expected the page without clipboard content")
+			}
+			if w.Header().Get("Cache-Control") != "no-store" {
+				t.Error("expected Cache-Control no-store")
+			}
+		})
+	}
+}
+
+func TestClipboardRead(t *testing.T) {
 	tests := []struct {
 		name     string
 		setup    func()
@@ -27,29 +57,46 @@ func TestClipboardGet(t *testing.T) {
 			setup:    func() { clipboard = "test text" },
 			expected: "test text",
 		},
+		{
+			name:     "with Unicode",
+			setup:    func() { clipboard = "text 世界" },
+			expected: "text 世界",
+		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setup()
+		for _, method := range []string{http.MethodGet, http.MethodHead} {
+			t.Run(tt.name+"/"+method, func(t *testing.T) {
+				tt.setup()
 
-			req := httptest.NewRequest(http.MethodGet, "/clipboard", nil)
-			w := httptest.NewRecorder()
+				req := httptest.NewRequest(method, "/clipboard", nil)
+				w := httptest.NewRecorder()
 
-			clipboardHandler(w, req)
+				clipboardHandler(w, req)
 
-			if w.Code != http.StatusOK {
-				t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
-			}
+				if w.Code != http.StatusOK {
+					t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
+				}
 
-			if w.Body.String() != tt.expected {
-				t.Errorf("expected body %q, got %q", tt.expected, w.Body.String())
-			}
+				expectedBody := tt.expected
+				if method == http.MethodHead {
+					expectedBody = ""
+				}
+				if w.Body.String() != expectedBody {
+					t.Errorf("expected body %q, got %q", expectedBody, w.Body.String())
+				}
+				if w.Header().Get("Content-Length") != strconv.Itoa(len(tt.expected)) {
+					t.Errorf("expected Content-Length %d, got %s", len(tt.expected), w.Header().Get("Content-Length"))
+				}
 
-			if w.Header().Get("Content-Type") != "text/plain" {
-				t.Errorf("expected Content-Type text/plain, got %s", w.Header().Get("Content-Type"))
-			}
-		})
+				if w.Header().Get("Content-Type") != "text/plain" {
+					t.Errorf("expected Content-Type text/plain, got %s", w.Header().Get("Content-Type"))
+				}
+				if w.Header().Get("Cache-Control") != "no-store" {
+					t.Error("expected Cache-Control no-store")
+				}
+			})
+		}
 	}
 }
 
@@ -349,4 +396,3 @@ func TestOldTimerClearsNewContent(t *testing.T) {
 		t.Logf("This means the old timer cleared the new content")
 	}
 }
-
